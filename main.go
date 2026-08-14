@@ -12,6 +12,65 @@ type InputBuffer struct {
     inputLength int
 }
 
+type MetaCommandResult int
+
+const (
+    MetaCommandSuccess MetaCommandResult = iota
+    MetaCommandUnrecognizedCommand
+)
+
+type PrepareResult int
+
+const (
+    PrepareSuccess PrepareResult = iota
+    PrepareUnrecognizedStatement
+)
+
+type StatementType int
+
+const (
+    StatementInsert StatementType = iota
+    StatementSelect
+)
+
+type Statement struct {
+    statementType StatementType
+}
+
+func doMetaCommand(inputBuffer *InputBuffer) MetaCommandResult {
+    if inputBuffer.buffer == ".exit" {
+        os.Exit(0)
+    }
+
+    return MetaCommandUnrecognizedCommand
+}
+
+func prepareStatement(
+    inputBuffer *InputBuffer,
+    statement *Statement,
+) PrepareResult {
+    if strings.HasPrefix(inputBuffer.buffer, "insert") {
+        statement.statementType = StatementInsert
+        return PrepareSuccess
+    }
+
+    if inputBuffer.buffer == "select" {
+        statement.statementType = StatementSelect
+        return PrepareSuccess
+    }
+
+    return PrepareUnrecognizedStatement
+}
+
+func executeStatement(statement *Statement) {
+    switch statement.statementType {
+    case StatementInsert:
+        fmt.Println("This is where we would do an insert.")
+    case StatementSelect:
+        fmt.Println("This is where we would do a select.")
+    }
+}
+
 func printPrompt() {
     fmt.Print("db > ")
 }
@@ -28,7 +87,7 @@ func readInput(inputBuffer *InputBuffer, reader *bufio.Reader) error {
     return nil
 }
 
-func main() {
+func main() { 
     inputBuffer := &InputBuffer{}
     reader := bufio.NewReader(os.Stdin)
 
@@ -40,10 +99,29 @@ func main() {
             return 
         }
 
-        if inputBuffer.buffer == ".exit" {
-            return
+        if strings.HasPrefix(inputBuffer.buffer, ".") {
+            switch doMetaCommand(inputBuffer) {
+            case MetaCommandSuccess:
+                continue
+            case MetaCommandUnrecognizedCommand:
+                fmt.Printf("Unrecognized command '%s'\n", inputBuffer.buffer)
+                continue
+            }
         }
 
-        fmt.Printf("Unrecognized command '%s' .\n", inputBuffer.buffer)
-    }
+        var statement Statement
+        switch prepareStatement(inputBuffer, &statement) {
+        case PrepareSuccess:
+            // 続けて実行する
+        case PrepareUnrecognizedStatement:
+            fmt.Printf(
+                "Unrecognized keyword at start of '%s'\n",
+                inputBuffer.buffer,
+            )
+            continue
+        }
+
+        executeStatement(&statement)
+        fmt.Println("Executed.")
+    }   
 }
