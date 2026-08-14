@@ -1,0 +1,44 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+
+# Go build artifacts
+/bin/
+/build/
+/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.out
+coverage.json
+
+# Go module cache / workspace metadata
+go.work
+go.work.sum
+
+# SQLite / local database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Editor / IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs and temp files
+*.log
+*.tmp
+/tmp/
+
+# Environment files
+.env
+.env.*
