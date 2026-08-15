@@ -124,15 +124,15 @@ func printRow(row *Row) {
 
 func serializeRow(source *Row, destination []byte) {
 	binary.LittleEndian.PutUint32(
-		destination[idOffset : idOffset + idSize],
+		destination[idOffset:idOffset+idSize],
 		source.id,
 	)
 	copy(
-		destination[usernameOffset : usernameOffset + usernameSize],
+		destination[usernameOffset:usernameOffset+usernameSize],
 		source.username,
 	)
 	copy(
-		destination[emailOffset : emailOffset + emailSize],
+		destination[emailOffset:emailOffset+emailSize],
 		source.email,
 	)
 }
@@ -170,13 +170,37 @@ func newTable() *Table {
 	return &Table{}
 }
 
-func executeStatement(statement *Statement) {
+func executeInsert(statement *Statement, table *Table) ExecuteResult {
+	if table.numRows >= tableMaxRows {
+		return ExecuteTableFull
+	}
+
+	rowToInsert := &statement.rowToInsert
+	serializeRow(rowToInsert, rowSlot(table, table.numRows))
+	table.numRows++
+
+	return ExecuteSuccess
+}
+
+func executeSelect(_ *Statement, table *Table) ExecuteResult {
+	for rowNum := uint32(0); rowNum < table.numRows; rowNum++ {
+		var row Row
+		deserializeRow(rowSlot(table, rowNum), &row)
+		printRow(&row)
+	}
+
+	return ExecuteSuccess
+}
+
+func executeStatement(statement *Statement, table *Table) ExecuteResult {
 	switch statement.statementType {
 	case StatementInsert:
-		fmt.Println("This is where we would do an insert.")
+		return executeInsert(statement, table)
 	case StatementSelect:
-		fmt.Println("This is where we would do a select.")
+		return executeSelect(statement, table)
 	}
+
+	return ExecuteSuccess
 }
 
 func printPrompt() {
@@ -196,6 +220,7 @@ func readInput(inputBuffer *InputBuffer, reader *bufio.Reader) error {
 }
 
 func main() {
+	table := newTable()
 	inputBuffer := &InputBuffer{}
 	reader := bufio.NewReader(os.Stdin)
 
@@ -232,7 +257,11 @@ func main() {
 			continue
 		}
 
-		executeStatement(&statement)
-		fmt.Println("Executed.")
+		switch executeStatement(&statement, table) {
+		case ExecuteSuccess:
+			fmt.Println("Executed.")
+		case ExecuteTableFull:
+			fmt.Println("Error: Table full.")
+		}
 	}
 }
