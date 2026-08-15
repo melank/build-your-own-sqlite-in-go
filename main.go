@@ -25,6 +25,8 @@ type PrepareResult int
 
 const (
 	PrepareSuccess PrepareResult = iota
+	PrepareNegativeID
+	PrepareStringTooLong
 	PrepareSyntaxError
 	PrepareUnrecognizedStatement
 )
@@ -98,9 +100,21 @@ func prepareStatement(
 			return PrepareSyntaxError
 		}
 
-		id, err := strconv.ParseUint(fields[1], 10, 32)
+		id, err := strconv.ParseInt(fields[1], 10, 32)
 		if err != nil {
 			return PrepareSyntaxError
+		}
+
+		if id < 0 {
+			return PrepareNegativeID
+		}
+
+		if len(fields[2]) > columnUsernameSize {
+			return PrepareStringTooLong
+		}
+
+		if len(fields[3]) > columnEmailSize {
+			return PrepareStringTooLong
 		}
 
 		statement.rowToInsert.id = uint32(id)
@@ -246,6 +260,12 @@ func main() {
 		switch prepareStatement(inputBuffer, &statement) {
 		case PrepareSuccess:
 			// 続けて実行する
+		case PrepareNegativeID:
+			fmt.Println("ID must be positive.")
+			continue
+		case PrepareStringTooLong:
+			fmt.Println("String is too long.")
+			continue
 		case PrepareSyntaxError:
 			fmt.Println("Syntax error. Could not parse statement.")
 			continue
