@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -23,6 +24,7 @@ type PrepareResult int
 
 const (
 	PrepareSuccess PrepareResult = iota
+	PrepareSyntaxError
 	PrepareUnrecognizedStatement
 )
 
@@ -89,6 +91,21 @@ func prepareStatement(
 ) PrepareResult {
 	if strings.HasPrefix(inputBuffer.buffer, "insert") {
 		statement.statementType = StatementInsert
+
+		fields := strings.Fields(inputBuffer.buffer)
+		if len(fields) < 4 {
+			return PrepareSyntaxError
+		}
+
+		id, err := strconv.ParseUint(fields[1], 10, 32)
+		if err != nil {
+			return PrepareSyntaxError
+		}
+
+		statement.rowToInsert.id = uint32(id)
+		statement.rowToInsert.username = fields[2]
+		statement.rowToInsert.email = fields[3]
+
 		return PrepareSuccess
 	}
 
@@ -151,6 +168,9 @@ func main() {
 		switch prepareStatement(inputBuffer, &statement) {
 		case PrepareSuccess:
 			// 続けて実行する
+		case PrepareSyntaxError:
+			fmt.Println("Syntax error. Could not parse statement.")
+			continue
 		case PrepareUnrecognizedStatement:
 			fmt.Printf(
 				"Unrecognized keyword at start of '%s'\n",
