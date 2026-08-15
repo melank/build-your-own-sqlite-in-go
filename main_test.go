@@ -3,14 +3,23 @@ package main
 import (
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func runScript(t *testing.T, commands []string) string {
+	return runScriptWithDatabase(
+		t,
+		filepath.Join(t.TempDir(), "test.db"),
+		commands,
+	)
+}
+
+func runScriptWithDatabase(t *testing.T, databaseFilename string, commands []string) string {
 	t.Helper()
 
-	cmd := exec.Command("go", "run", ".")
+	cmd := exec.Command("go", "run", ".", databaseFilename)
 	cmd.Stdin = strings.NewReader(strings.Join(commands, "\n") + "\n")
 
 	output, err := cmd.CombinedOutput()
@@ -112,5 +121,39 @@ func TestNagativeId(t *testing.T) {
 
 	if got != want {
 		t.Errorf("output mismatch\nwant:\n%q\ngot:\n%q", want, got)
+	}
+}
+
+func TestKeepsDataAfterClosingConnection(t *testing.T) {
+	databaseFilename := filepath.Join(t.TempDir(), "test.db")
+
+	firstOutput := runScriptWithDatabase(t, databaseFilename, []string{
+		"insert 1 user1 person1@example.com",
+		".exit",
+	})
+	firstWant := "db > Executed.\ndb > "
+
+	if firstOutput != firstWant {
+		t.Errorf(
+			"first output mismatch\nwant:\n%q\ngot:\n%q",
+			firstWant,
+			firstOutput,
+		)
+	}
+
+	secondOutput := runScriptWithDatabase(t, databaseFilename, []string{
+		"select",
+		".exit",
+	})
+	secondWant := "db > (1, user1, person1@example.com)\n" +
+		"Executed.\n" +
+		"db > "
+
+	if secondOutput != secondWant {
+		t.Errorf(
+			"second outout mismatch\nwant:\n%qgot:\n%q",
+			secondWant,
+			secondOutput,
+		)
 	}
 }
