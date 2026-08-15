@@ -1,3 +1,3 @@
-module github.com/animalife/build-your-own-sqlite-in-go
+module github.com/melank/build-your-own-sqlite-in-go
 
 go 1.26.1
