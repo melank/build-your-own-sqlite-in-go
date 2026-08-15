@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"strconv"
@@ -115,6 +116,58 @@ func prepareStatement(
 	}
 
 	return PrepareUnrecognizedStatement
+}
+
+func printRow(row *Row) {
+	fmt.Printf("(%d, %s, %s)\n", row.id, row.username, row.email)
+}
+
+func serializeRow(source *Row, destination []byte) {
+	binary.LittleEndian.PutUint32(
+		destination[idOffset : idOffset + idSize],
+		source.id,
+	)
+	copy(
+		destination[usernameOffset : usernameOffset + usernameSize],
+		source.username,
+	)
+	copy(
+		destination[emailOffset : emailOffset + emailSize],
+		source.email,
+	)
+}
+
+func deserializeRow(source []byte, destination *Row) {
+	destination.id = binary.LittleEndian.Uint32(
+		source[idOffset : idOffset+idSize],
+	)
+	destination.username = strings.TrimRight(
+		string(source[usernameOffset:usernameOffset+usernameSize]),
+		"\x00",
+	)
+	destination.email = strings.TrimRight(
+		string(source[emailOffset:emailOffset+emailSize]),
+		"\x00",
+	)
+}
+
+func rowSlot(table *Table, rowNum uint32) []byte {
+	pageNum := rowNum / rowsPerPage
+	page := table.pages[pageNum]
+
+	if page == nil {
+		page = make([]byte, pageSize)
+		table.pages[pageNum] = page
+	}
+
+	rowOffset := rowNum % rowsPerPage
+	byteOffset := rowOffset * rowSize
+
+	return page[byteOffset : byteOffset+rowSize]
+}
+
+func newTable() *Table {
+	return &Table{}
 }
 
 func executeStatement(statement *Statement) {
