@@ -82,6 +82,12 @@ type Table struct {
 	pager   *Pager
 }
 
+type Cursor struct {
+	table      *Table
+	rowNum     uint32
+	endOfTable bool
+}
+
 type Statement struct {
 	statementType StatementType
 	rowToInsert   Row
@@ -183,6 +189,33 @@ func rowSlot(table *Table, rowNum uint32) []byte {
 	byteOffset := rowOffset * rowSize
 
 	return page[byteOffset : byteOffset+rowSize]
+}
+
+func tableStart(table *Table) *Cursor {
+	return &Cursor{
+		table:      table,
+		rowNum:     0,
+		endOfTable: table.numRows == 0,
+	}
+}
+
+func tableEnd(table *Table) *Cursor {
+	return &Cursor{
+		table:      table,
+		rowNum:     table.numRows,
+		endOfTable: true,
+	}
+}
+
+func cursorValue(cursor *Cursor) []byte {
+	return rowSlot(cursor.table, cursor.rowNum)
+}
+
+func cursorAdvance(cursor *Cursor) {
+	cursor.rowNum++
+	if cursor.rowNum >= cursor.table.numRows {
+		cursor.endOfTable = true
+	}
 }
 
 func pagerOpen(filename string) *Pager {
@@ -288,18 +321,22 @@ func executeInsert(statement *Statement, table *Table) ExecuteResult {
 		return ExecuteTableFull
 	}
 
+	cursor := tableEnd(table)
 	rowToInsert := &statement.rowToInsert
-	serializeRow(rowToInsert, rowSlot(table, table.numRows))
+	serializeRow(rowToInsert, cursorValue(cursor))
 	table.numRows++
 
 	return ExecuteSuccess
 }
 
 func executeSelect(_ *Statement, table *Table) ExecuteResult {
-	for rowNum := uint32(0); rowNum < table.numRows; rowNum++ {
+	cursor := tableStart(table)
+
+	for !cursor.endOfTable {
 		var row Row
-		deserializeRow(rowSlot(table, rowNum), &row)
+		deserializeRow(cursorValue(cursor), &row)
 		printRow(&row)
+		cursorAdvance(cursor)
 	}
 
 	return ExecuteSuccess
