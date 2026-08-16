@@ -34,6 +34,40 @@ const (
 
 type StatementType int
 
+type NodeType byte
+
+const (
+	NodeInternal NodeType = iota
+	NodeLeaf
+)
+
+const (
+	nodeTypeSize   = 1
+	nodeTypeOffset = 0
+
+	isRootSize   = 1
+	isRootOffset = nodeTypeOffset + nodeTypeSize
+
+	parentPointerSize   = 4
+	parentPointerOffset = isRootOffset + isRootSize
+
+	commonNodeHeaderSize = nodeTypeSize + isRootSize + parentPointerSize
+
+	leafNodeNumCellsSize   = 4
+	leafNodeNumCellsOffset = commonNodeHeaderSize
+	leafNodeHeaderSize     = commonNodeHeaderSize + leafNodeNumCellsSize
+
+	leafNodeKeySize   = 4
+	leafNodeKeyOffset = 0
+
+	leafNodeValueSize   = rowSize
+	leafNodeValueOffset = leafNodeKeyOffset + leafNodeKeySize
+
+	leafNodeCellSize      = leafNodeKeySize + leafNodeValueSize
+	leafNodeSpaceForCells = pageSize - leafNodeHeaderSize
+	leafNodeMaxCells      = leafNodeSpaceForCells / leafNodeCellSize
+)
+
 const (
 	StatementInsert StatementType = iota
 	StatementSelect
@@ -101,6 +135,12 @@ func doMetaCommand(
 		os.Exit(0)
 	}
 
+	if inputBuffer.buffer == ".constants" {
+		fmt.Println("Constants:")
+		printConstants()
+		return MetaCommandSuccess
+	}
+
 	return MetaCommandUnrecognizedCommand
 }
 
@@ -146,6 +186,15 @@ func prepareStatement(
 	}
 
 	return PrepareUnrecognizedStatement
+}
+
+func printConstants() {
+	fmt.Printf("ROW_SIZE: %d\n", rowSize)
+	fmt.Printf("COMMON_NODE_HEADER_SIZE: %d\n", commonNodeHeaderSize)
+	fmt.Printf("LEAF_NODE_HEADER_SIZE: %d\n", leafNodeHeaderSize)
+	fmt.Printf("LEAF_NODE_CELL_SIZE: %d\n", leafNodeCellSize)
+	fmt.Printf("LEAF_NODE_SPACE_FOR_CELLS: %d\n", leafNodeSpaceForCells)
+	fmt.Printf("LEAF_NODE_MAX_CELLS: %d\n", leafNodeMaxCells)
 }
 
 func printRow(row *Row) {
