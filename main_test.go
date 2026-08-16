@@ -211,7 +211,12 @@ func TestPrintThreeLeafNodeBTree(t *testing.T) {
 		)
 	}
 
-	commands = append(commands, ".btree", ".exit")
+	commands = append(
+		commands,
+		".btree",
+		"insert 15 user15 person15@example.com",
+		".exit",
+	)
 
 	got := runScript(t, commands)
 
@@ -238,6 +243,7 @@ func TestPrintThreeLeafNodeBTree(t *testing.T) {
 		"    - 12\n" +
 		"    - 13\n" +
 		"    - 14\n" +
+		"db > Executed.\n" +
 		"db > "
 
 	if got != want {

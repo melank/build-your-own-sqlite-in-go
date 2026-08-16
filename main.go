@@ -568,9 +568,7 @@ func tableFind(table *Table, key uint32) *Cursor {
 		return leafNodeFind(table, rootPageNum, key)
 	}
 
-	fmt.Fprintln(os.Stderr, "Need to implement searching an internal node.")
-	os.Exit(1)
-	return nil
+	return internalNodeFind(table, rootPageNum, key)
 }
 
 func leafNodeFind(table *Table, pageNum uint32, key uint32) *Cursor {
@@ -603,6 +601,39 @@ func leafNodeFind(table *Table, pageNum uint32, key uint32) *Cursor {
 
 	cursor.cellNum = minIndex
 	return cursor
+}
+
+func internalNodeFind(table *Table, pageNum uint32, key uint32) *Cursor {
+	node := getPage(table.pager, pageNum)
+	numKeys := internalNodeNumKeys(node)
+
+	// キー数より子ノード数は1つ多い
+	minIndex := uint32(0)
+	maxIndex := numKeys
+
+	// key 以上の最初の内部ノードキーを探す
+	for minIndex != maxIndex {
+		index := (minIndex + maxIndex) / 2
+		keyToRight := internalNodeKey(node, index)
+
+		if keyToRight >= key {
+			maxIndex = index
+		} else {
+			minIndex = index + 1
+		}
+	}
+
+	childPageNum := internalNodeChild(node, minIndex)
+	child := getPage(table.pager, childPageNum)
+
+	switch getNodeType(child) {
+	case NodeLeaf:
+		return leafNodeFind(table, childPageNum, key)
+	case NodeInternal:
+		return internalNodeFind(table, childPageNum, key)
+	default:
+		panic("unknown node type")
+	}
 }
 
 func cursorValue(cursor *Cursor) []byte {
