@@ -250,3 +250,43 @@ func TestPrintThreeLeafNodeBTree(t *testing.T) {
 		t.Errorf("output mismatch\nwant\n%q\ngot:\n%q", want, got)
 	}
 }
+
+func TestSelectFromMultiLevelBTree(t *testing.T) {
+	commands := make([]string, 0, leafNodeMaxCells+4)
+
+	for i := 1; i <= leafNodeMaxCells+2; i++ {
+		commands = append(
+			commands,
+			fmt.Sprintf("insert %d user%d person%d@example.com", i, i, i),
+		)
+	}
+
+	commands = append(commands, "select", ".exit")
+
+	got := runScript(t, commands)
+	var want strings.Builder
+
+	for i := 1; i <= leafNodeMaxCells+2; i++ {
+		want.WriteString("db > Executed.\n")
+	}
+
+	want.WriteString("db > ")
+
+	for i := 1; i <= leafNodeMaxCells+2; i++ {
+		fmt.Fprintf(
+			&want,
+			"(%d, user%d, person%d@example.com)\n", i, i, i,
+		)
+	}
+
+	want.WriteString("Executed.\n")
+	want.WriteString("db > ")
+
+	if got != want.String() {
+		t.Errorf(
+			"output mismatch\nwant:\n%q\ngot:\n%q",
+			want.String(),
+			got,
+		)
+	}
+}

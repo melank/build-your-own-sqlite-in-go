@@ -430,6 +430,7 @@ func initializeLeafNode(node []byte) {
 	setNodeType(node, NodeLeaf)
 	setNodeRoot(node, false)
 	setLeafNodeNumCells(node, 0)
+	setLeafNodeNextLeaf(node, 0)
 }
 
 func initializeInternalNode(node []byte) {
@@ -466,6 +467,9 @@ func leafNodeSplitAndInsert(cursor *Cursor, key uint32, value *Row) {
 	newPageNum := getUnusedPageNum(cursor.table.pager)
 	newNode := getPage(cursor.table.pager, newPageNum)
 	initializeLeafNode(newNode)
+
+	setLeafNodeNextLeaf(newNode, leafNodeNextLeaf(oldNode))
+	setLeafNodeNextLeaf(oldNode, newPageNum)
 
 	// 既存13セルと新規1セルを、右端から正しい位置へ再配置する
 	for i := int32(leafNodeMaxCells); i >= 0; i-- {
@@ -565,14 +569,11 @@ func printTree(pager *Pager, pageNum uint32, indentationLevel uint32) {
 }
 
 func tableStart(table *Table) *Cursor {
-	rootNode := getPage(table.pager, table.rootPageNum)
+	cursor := tableFind(table, 0)
+	node := getPage(table.pager, cursor.pageNum)
+	cursor.endOfTable = leafNodeNumCells(node) == 0
 
-	return &Cursor{
-		table:      table,
-		pageNum:    table.rootPageNum,
-		cellNum:    0,
-		endOfTable: leafNodeNumCells(rootNode) == 0,
-	}
+	return cursor
 }
 
 // tableFind returns the key's position, or the position where it belongs.
@@ -662,7 +663,14 @@ func cursorAdvance(cursor *Cursor) {
 	cursor.cellNum++
 
 	if cursor.cellNum >= leafNodeNumCells(node) {
-		cursor.endOfTable = true
+		nextPageNum := leafNodeNextLeaf(node)
+
+		if nextPageNum == 0 {
+			cursor.endOfTable = true
+		} else {
+			cursor.pageNum = nextPageNum
+			cursor.cellNum = 0
+		}
 	}
 }
 
