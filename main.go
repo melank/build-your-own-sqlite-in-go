@@ -88,8 +88,6 @@ const (
 
 	pageSize      = 4096
 	tableMaxPages = 100
-	rowsPerPage   = pageSize / rowSize
-	tableMaxRows  = rowsPerPage * tableMaxPages
 )
 
 type Row struct {
@@ -108,17 +106,19 @@ const (
 type Pager struct {
 	file       *os.File
 	fileLength int64
+	numPages   uint32
 	pages      [tableMaxPages][]byte
 }
 
 type Table struct {
-	numRows uint32
-	pager   *Pager
+	pager       *Pager
+	rootPageNum uint32
 }
 
 type Cursor struct {
 	table      *Table
-	rowNum     uint32
+	pageNum    uint32
+	cellNum    uint32
 	endOfTable bool
 }
 
@@ -133,6 +133,12 @@ func doMetaCommand(
 	if inputBuffer.buffer == ".exit" {
 		dbClose(table)
 		os.Exit(0)
+	}
+
+	if inputBuffer.buffer == ".btree" {
+		fmt.Println("Tree:")
+		printLeafNode(getPage(table.pager, table.rootPageNum))
+		return MetaCommandSuccess
 	}
 
 	if inputBuffer.buffer == ".constants" {
@@ -230,39 +236,112 @@ func deserializeRow(source []byte, destination *Row) {
 	)
 }
 
-func rowSlot(table *Table, rowNum uint32) []byte {
-	pageNum := rowNum / rowsPerPage
-	page := getPage(table.pager, pageNum)
+func leafNodeNumCells(node []byte) uint32 {
+	return binary.LittleEndian.Uint32(
+		node[leafNodeNumCellsOffset : leafNodeNumCellsOffset+leafNodeNumCellsSize],
+	)
+}
 
-	rowOffset := rowNum % rowsPerPage
-	byteOffset := rowOffset * rowSize
+func setLeafNodeNumCells(node []byte, numCells uint32) {
+	binary.LittleEndian.PutUint32(
+		node[leafNodeNumCellsOffset:leafNodeNumCellsOffset+leafNodeNumCellsSize],
+		numCells,
+	)
+}
 
-	return page[byteOffset : byteOffset+rowSize]
+func leafNodeCell(node []byte, cellNum uint32) []byte {
+	cellOffset := leafNodeHeaderSize + cellNum*leafNodeCellSize
+	return node[cellOffset : cellOffset+leafNodeCellSize]
+}
+
+func leafNodeKey(node []byte, cellNum uint32) uint32 {
+	cell := leafNodeCell(node, cellNum)
+	return binary.LittleEndian.Uint32(
+		cell[leafNodeKeyOffset : leafNodeKeyOffset+leafNodeKeySize],
+	)
+}
+
+func setLeafNodeKey(node []byte, cellNum uint32, key uint32) {
+	cell := leafNodeCell(node, cellNum)
+	binary.LittleEndian.PutUint32(
+		cell[leafNodeKeyOffset:leafNodeKeyOffset+leafNodeKeySize],
+		key,
+	)
+}
+
+func leafNodeValue(node []byte, cellNum uint32) []byte {
+	cell := leafNodeCell(node, cellNum)
+	return cell[leafNodeValueOffset : leafNodeValueOffset+leafNodeValueSize]
+}
+
+func initializeLeafNode(node []byte) {
+	setLeafNodeNumCells(node, 0)
+}
+
+func leafNodeInsert(cursor *Cursor, key uint32, value *Row) {
+	node := getPage(cursor.table.pager, cursor.pageNum)
+	numCells := leafNodeNumCells(node)
+
+	if numCells >= leafNodeMaxCells {
+		fmt.Fprintln(os.Stderr, "Need to implement splitting a leaf node.")
+		os.Exit(1)
+	}
+
+	if cursor.cellNum < numCells {
+		for cellNum := numCells; cellNum > cursor.cellNum; cellNum-- {
+			copy(
+				leafNodeCell(node, cellNum),
+				leafNodeCell(node, cellNum-1),
+			)
+		}
+	}
+
+	setLeafNodeNumCells(node, numCells+1)
+	setLeafNodeKey(node, cursor.cellNum, key)
+	serializeRow(value, leafNodeValue(node, cursor.cellNum))
+}
+
+func printLeafNode(node []byte) {
+	numCells := leafNodeNumCells(node)
+	fmt.Printf("leaf (size %d)\n", numCells)
+
+	for cellNum := uint32(0); cellNum < numCells; cellNum++ {
+		fmt.Printf("  - %d : %d\n", cellNum, leafNodeKey(node, cellNum))
+	}
 }
 
 func tableStart(table *Table) *Cursor {
+	rootNode := getPage(table.pager, table.rootPageNum)
+
 	return &Cursor{
 		table:      table,
-		rowNum:     0,
-		endOfTable: table.numRows == 0,
+		pageNum:    table.rootPageNum,
+		cellNum:    0,
+		endOfTable: leafNodeNumCells(rootNode) == 0,
 	}
 }
 
 func tableEnd(table *Table) *Cursor {
+	rootNode := getPage(table.pager, table.rootPageNum)
+
 	return &Cursor{
 		table:      table,
-		rowNum:     table.numRows,
+		pageNum:    table.rootPageNum,
+		cellNum:    leafNodeNumCells(rootNode),
 		endOfTable: true,
 	}
 }
 
 func cursorValue(cursor *Cursor) []byte {
-	return rowSlot(cursor.table, cursor.rowNum)
+	node := getPage(cursor.table.pager, cursor.pageNum)
+	return leafNodeValue(node, cursor.cellNum)
 }
 
 func cursorAdvance(cursor *Cursor) {
-	cursor.rowNum++
-	if cursor.rowNum >= cursor.table.numRows {
+	node := getPage(cursor.table.pager, cursor.pageNum)
+	cursor.cellNum++
+
+	if cursor.cellNum >= leafNodeNumCells(node) {
 		cursor.endOfTable = true
 	}
 }
@@ -280,9 +359,15 @@ func pagerOpen(filename string) *Pager {
 		os.Exit(1)
 	}
 
+	if fileInfo.Size()%pageSize != 0 {
+		fmt.Fprintln(os.Stderr, "Db file is not a whole number of pages.")
+		os.Exit(1)
+	}
+
 	return &Pager{
 		file:       file,
 		fileLength: fileInfo.Size(),
+		numPages:   uint32(fileInfo.Size() / pageSize),
 	}
 }
 
@@ -309,6 +394,10 @@ func getPage(pager *Pager, pageNum uint32) []byte {
 		}
 
 		pager.pages[pageNum] = page
+
+		if pageNum >= pager.numPages {
+			pager.numPages = pageNum + 1
+		}
 	}
 
 	return pager.pages[pageNum]
@@ -316,21 +405,27 @@ func getPage(pager *Pager, pageNum uint32) []byte {
 
 func dbOpen(filename string) *Table {
 	pager := pagerOpen(filename)
-
-	return &Table{
-		pager:   pager,
-		numRows: uint32(pager.fileLength / rowSize),
+	table := &Table{
+		pager:       pager,
+		rootPageNum: 0,
 	}
+
+	if pager.numPages == 0 {
+		rootNode := getPage(pager, table.rootPageNum)
+		initializeLeafNode(rootNode)
+	}
+
+	return table
 }
 
-func pagerFlush(pager *Pager, pageNum uint32, size int) {
+func pagerFlush(pager *Pager, pageNum uint32) {
 	page := pager.pages[pageNum]
 	if page == nil {
 		fmt.Fprintln(os.Stderr, "Tried to flush an unloaded page.")
 		os.Exit(1)
 	}
 
-	_, err := pager.file.WriteAt(page[:size], int64(pageNum)*pageSize)
+	_, err := pager.file.WriteAt(page, int64(pageNum)*pageSize)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error writing file:", err)
 		os.Exit(1)
@@ -339,23 +434,10 @@ func pagerFlush(pager *Pager, pageNum uint32, size int) {
 
 func dbClose(table *Table) {
 	pager := table.pager
-	numFullPages := table.numRows / rowsPerPage
 
-	for pageNum := uint32(0); pageNum < numFullPages; pageNum++ {
+	for pageNum := uint32(0); pageNum < pager.numPages; pageNum++ {
 		if pager.pages[pageNum] != nil {
-			pagerFlush(pager, pageNum, pageSize)
-		}
-	}
-
-	numAdditionalRows := table.numRows % rowsPerPage
-	if numAdditionalRows > 0 {
-		pageNum := numFullPages
-		if pager.pages[pageNum] != nil {
-			pagerFlush(
-				pager,
-				pageNum,
-				int(numAdditionalRows*rowSize),
-			)
+			pagerFlush(pager, pageNum)
 		}
 	}
 
@@ -366,14 +448,15 @@ func dbClose(table *Table) {
 }
 
 func executeInsert(statement *Statement, table *Table) ExecuteResult {
-	if table.numRows >= tableMaxRows {
+	node := getPage(table.pager, table.rootPageNum)
+
+	if leafNodeNumCells(node) >= leafNodeMaxCells {
 		return ExecuteTableFull
 	}
 
-	cursor := tableEnd(table)
 	rowToInsert := &statement.rowToInsert
-	serializeRow(rowToInsert, cursorValue(cursor))
-	table.numRows++
+	cursor := tableEnd(table)
+	leafNodeInsert(cursor, rowToInsert.id, rowToInsert)
 
 	return ExecuteSuccess
 }

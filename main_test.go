@@ -49,9 +49,9 @@ func TestInsertAndSelect(t *testing.T) {
 }
 
 func TestTableFull(t *testing.T) {
-	commands := make([]string, 0, tableMaxRows+2)
+	commands := make([]string, 0, leafNodeMaxCells+2)
 
-	for i := 1; i <= tableMaxRows+1; i++ {
+	for i := 1; i <= leafNodeMaxCells+1; i++ {
 		commands = append(
 			commands,
 			fmt.Sprintf("insert %d user%d person%d@example.com", i, i, i),
@@ -171,6 +171,30 @@ func TestPrintConstants(t *testing.T) {
 		"LEAF_NODE_CELL_SIZE: 295\n" +
 		"LEAF_NODE_SPACE_FOR_CELLS: 4086\n" +
 		"LEAF_NODE_MAX_CELLS: 13\n" +
+		"db > "
+
+	if got != want {
+		t.Errorf("output mismatch\nwant:\n%q\ngot:\n%q", want, got)
+	}
+}
+
+func TestPrintOneNodeBTree(t *testing.T) {
+	got := runScript(t, []string{
+		"insert 3 user3 person3@example.com",
+		"insert 1 user1 person1@example.com",
+		"insert 2 user2 person2@example.com",
+		".btree",
+		".exit",
+	})
+
+	want := "db > Executed.\n" +
+		"db > Executed.\n" +
+		"db > Executed.\n" +
+		"db > Tree:\n" +
+		"leaf (size 3)\n" +
+		"  - 0 : 3\n" +
+		"  - 1 : 1\n" +
+		"  - 2 : 2\n" +
 		"db > "
 
 	if got != want {
