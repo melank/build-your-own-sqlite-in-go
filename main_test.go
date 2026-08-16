@@ -147,9 +147,9 @@ func TestPrintConstants(t *testing.T) {
 	want := "db > Constants:\n" +
 		"ROW_SIZE: 291\n" +
 		"COMMON_NODE_HEADER_SIZE: 6\n" +
-		"LEAF_NODE_HEADER_SIZE: 10\n" +
+		"LEAF_NODE_HEADER_SIZE: 14\n" +
 		"LEAF_NODE_CELL_SIZE: 295\n" +
-		"LEAF_NODE_SPACE_FOR_CELLS: 4086\n" +
+		"LEAF_NODE_SPACE_FOR_CELLS: 4082\n" +
 		"LEAF_NODE_MAX_CELLS: 13\n" +
 		"db > "
 

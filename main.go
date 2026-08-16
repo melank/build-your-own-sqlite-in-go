@@ -67,7 +67,10 @@ const (
 
 	leafNodeNumCellsSize   = 4
 	leafNodeNumCellsOffset = commonNodeHeaderSize
-	leafNodeHeaderSize     = commonNodeHeaderSize + leafNodeNumCellsSize
+	leafNodeNextLeafSize   = 4
+	leafNodeNextLeafOffset = leafNodeNumCellsOffset + leafNodeNumCellsSize
+
+	leafNodeHeaderSize = commonNodeHeaderSize + leafNodeNumCellsSize + leafNodeNextLeafSize
 
 	leafNodeKeySize   = 4
 	leafNodeKeyOffset = 0
@@ -261,6 +264,19 @@ func setLeafNodeNumCells(node []byte, numCells uint32) {
 	binary.LittleEndian.PutUint32(
 		node[leafNodeNumCellsOffset:leafNodeNumCellsOffset+leafNodeNumCellsSize],
 		numCells,
+	)
+}
+
+func leafNodeNextLeaf(node []byte) uint32 {
+	return binary.LittleEndian.Uint32(
+		node[leafNodeNextLeafOffset : leafNodeNextLeafOffset+leafNodeNextLeafSize],
+	)
+}
+
+func setLeafNodeNextLeaf(node []byte, pageNum uint32) {
+	binary.LittleEndian.PutUint32(
+		node[leafNodeNextLeafOffset:leafNodeNextLeafOffset*leafNodeNextLeafSize],
+		pageNum,
 	)
 }
 
