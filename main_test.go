@@ -48,26 +48,6 @@ func TestInsertAndSelect(t *testing.T) {
 	}
 }
 
-func TestTableFull(t *testing.T) {
-	commands := make([]string, 0, leafNodeMaxCells+2)
-
-	for i := 1; i <= leafNodeMaxCells+1; i++ {
-		commands = append(
-			commands,
-			fmt.Sprintf("insert %d user%d person%d@example.com", i, i, i),
-		)
-	}
-
-	commands = append(commands, ".exit")
-
-	got := runScript(t, commands)
-	wantSuffix := "db > Error: Table full.\ndb > "
-
-	if !strings.HasSuffix(got, wantSuffix) {
-		t.Errorf("expected table-full error at the end\ngot:\n%q", got)
-	}
-}
-
 func TestMaximumLengthStrings(t *testing.T) {
 	username := strings.Repeat("a", columnUsernameSize)
 	email := strings.Repeat("a", columnEmailSize)
@@ -191,10 +171,10 @@ func TestPrintOneNodeBTree(t *testing.T) {
 		"db > Executed.\n" +
 		"db > Executed.\n" +
 		"db > Tree:\n" +
-		"leaf (size 3)\n" +
-		"  - 0 : 1\n" +
-		"  - 1 : 2\n" +
-		"  - 2 : 3\n" +
+		"- leaf (size 3)\n" +
+		"  - 1\n" +
+		"  - 2\n" +
+		"  - 3\n" +
 		"db > "
 
 	if got != want {
@@ -213,10 +193,54 @@ func TestDuplicateKeys(t *testing.T) {
 	want := "db > Executed.\n" +
 		"db > Error: Duplicate key.\n" +
 		"db > (1, user1, person1@example.com)\n" +
-		"Executed.\n" + 
+		"Executed.\n" +
 		"db > "
 
 	if got != want {
 		t.Errorf("output mismatch\nwant:\n%q\ngot:\n%q", want, got)
+	}
+}
+
+func TestPrintThreeLeafNodeBTree(t *testing.T) {
+	commands := make([]string, 0, leafNodeMaxCells+2)
+
+	for i := 1; i <= leafNodeMaxCells+1; i++ {
+		commands = append(
+			commands,
+			fmt.Sprintf("insert %d user%d person%d@example.com", i, i, i),
+		)
+	}
+
+	commands = append(commands, ".btree", ".exit")
+
+	got := runScript(t, commands)
+
+	want := strings.Repeat(
+		"db > Executed.\n",
+		int(leafNodeMaxCells+1),
+	) +
+		"db > Tree:\n" +
+		"- internal (size 1)\n" +
+		"  - leaf (size 7)\n" +
+		"    - 1\n" +
+		"    - 2\n" +
+		"    - 3\n" +
+		"    - 4\n" +
+		"    - 5\n" +
+		"    - 6\n" +
+		"    - 7\n" +
+		"  - key 7\n" +
+		"  - leaf (size 7)\n" +
+		"    - 8\n" +
+		"    - 9\n" +
+		"    - 10\n" +
+		"    - 11\n" +
+		"    - 12\n" +
+		"    - 13\n" +
+		"    - 14\n" +
+		"db > "
+
+	if got != want {
+		t.Errorf("output mismatch\nwant\n%q\ngot:\n%q", want, got)
 	}
 }
