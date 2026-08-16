@@ -192,9 +192,28 @@ func TestPrintOneNodeBTree(t *testing.T) {
 		"db > Executed.\n" +
 		"db > Tree:\n" +
 		"leaf (size 3)\n" +
-		"  - 0 : 3\n" +
-		"  - 1 : 1\n" +
-		"  - 2 : 2\n" +
+		"  - 0 : 1\n" +
+		"  - 1 : 2\n" +
+		"  - 2 : 3\n" +
+		"db > "
+
+	if got != want {
+		t.Errorf("output mismatch\nwant:\n%q\ngot:\n%q", want, got)
+	}
+}
+
+func TestDuplicateKeys(t *testing.T) {
+	got := runScript(t, []string{
+		"insert 1 user1 person1@example.com",
+		"insert 1 user1 person1@example.com",
+		"select",
+		".exit",
+	})
+
+	want := "db > Executed.\n" +
+		"db > Error: Duplicate key.\n" +
+		"db > (1, user1, person1@example.com)\n" +
+		"Executed.\n" + 
 		"db > "
 
 	if got != want {

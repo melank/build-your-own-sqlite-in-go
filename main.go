@@ -100,6 +100,7 @@ type ExecuteResult int
 
 const (
 	ExecuteSuccess ExecuteResult = iota
+	ExecuteDuplicateKey
 	ExecuteTableFull
 )
 
@@ -249,6 +250,14 @@ func setLeafNodeNumCells(node []byte, numCells uint32) {
 	)
 }
 
+func getNodeType(node []byte) NodeType {
+	return NodeType(node[nodeTypeOffset])
+}
+
+func setNodeType(node []byte, nodeType NodeType) {
+	node[nodeTypeOffset] = byte(nodeType)
+}
+
 func leafNodeCell(node []byte, cellNum uint32) []byte {
 	cellOffset := leafNodeHeaderSize + cellNum*leafNodeCellSize
 	return node[cellOffset : cellOffset+leafNodeCellSize]
@@ -275,6 +284,7 @@ func leafNodeValue(node []byte, cellNum uint32) []byte {
 }
 
 func initializeLeafNode(node []byte) {
+	setNodeType(node, NodeLeaf)
 	setLeafNodeNumCells(node, 0)
 }
 
@@ -321,15 +331,50 @@ func tableStart(table *Table) *Cursor {
 	}
 }
 
-func tableEnd(table *Table) *Cursor {
-	rootNode := getPage(table.pager, table.rootPageNum)
+// tableFind returns the key's position, or the position where it belongs.
+func tableFind(table *Table, key uint32) *Cursor {
+	rootPageNum := table.rootPageNum
+	rootNode := getPage(table.pager, rootPageNum)
 
-	return &Cursor{
-		table:      table,
-		pageNum:    table.rootPageNum,
-		cellNum:    leafNodeNumCells(rootNode),
-		endOfTable: true,
+	if getNodeType(rootNode) == NodeLeaf {
+		return leafNodeFind(table, rootPageNum, key)
 	}
+
+	fmt.Fprintln(os.Stderr, "Need to implement searching an internal node.")
+	os.Exit(1)
+	return nil
+}
+
+func leafNodeFind(table *Table, pageNum uint32, key uint32) *Cursor {
+	node := getPage(table.pager, pageNum)
+	numCells := leafNodeNumCells(node)
+
+	cursor := &Cursor{
+		table:   table,
+		pageNum: pageNum,
+	}
+
+	minIndex := uint32(0)
+	onePastMaxIndex := numCells
+
+	for onePastMaxIndex != minIndex {
+		index := (minIndex + onePastMaxIndex) / 2
+		keyAtIndex := leafNodeKey(node, index)
+
+		if key == keyAtIndex {
+			cursor.cellNum = index
+			return cursor
+		}
+
+		if key < keyAtIndex {
+			onePastMaxIndex = index
+		} else {
+			minIndex = index + 1
+		}
+	}
+
+	cursor.cellNum = minIndex
+	return cursor
 }
 
 func cursorValue(cursor *Cursor) []byte {
@@ -449,13 +494,23 @@ func dbClose(table *Table) {
 
 func executeInsert(statement *Statement, table *Table) ExecuteResult {
 	node := getPage(table.pager, table.rootPageNum)
+	numCells := leafNodeNumCells(node)
 
-	if leafNodeNumCells(node) >= leafNodeMaxCells {
+	if numCells >= leafNodeMaxCells {
 		return ExecuteTableFull
 	}
 
 	rowToInsert := &statement.rowToInsert
-	cursor := tableEnd(table)
+	keyToInsert := rowToInsert.id
+	cursor := tableFind(table, keyToInsert)
+
+	if cursor.cellNum < numCells {
+		keyAtIndex := leafNodeKey(node, cursor.cellNum)
+		if keyAtIndex == keyToInsert {
+			return ExecuteDuplicateKey
+		}
+	}
+
 	leafNodeInsert(cursor, rowToInsert.id, rowToInsert)
 
 	return ExecuteSuccess
@@ -553,6 +608,8 @@ func main() {
 		switch executeStatement(&statement, table) {
 		case ExecuteSuccess:
 			fmt.Println("Executed.")
+		case ExecuteDuplicateKey:
+			fmt.Println("Error: Duplicate key.")
 		case ExecuteTableFull:
 			fmt.Println("Error: Table full.")
 		}
