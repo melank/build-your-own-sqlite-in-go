@@ -301,6 +301,19 @@ func setNodeRoot(node []byte, isRoot bool) {
 	node[isRootOffset] = 0
 }
 
+func nodeParent(node []byte) uint32 {
+	return binary.LittleEndian.Uint32(
+		node[parentPointerOffset : parentPointerOffset+parentPointerSize],
+	)
+}
+
+func setNodeParent(node []byte, pageNum uint32) {
+	binary.LittleEndian.PutUint32(
+		node[parentPointerOffset:parentPointerOffset+parentPointerSize],
+		pageNum,
+	)
+}
+
 func internalNodeNumKeys(node []byte) uint32 {
 	return binary.LittleEndian.Uint32(
 		node[internalNodeNumKeysOffset : internalNodeNumKeysOffset+internalNodeNumKeysSize],
@@ -458,8 +471,8 @@ func createNewRoot(table *Table, rightChildPageNum uint32) {
 	setInternalNodeKey(root, 0, getNodeMaxKey(leftChild))
 	setInternalNodeRightChild(root, rightChildPageNum)
 
-	// rightChild は将来の親ポインタ実装で使うため、ここでは参照だけ行う
-	_ = rightChild
+	setNodeParent(leftChild, table.rootPageNum)
+	setNodeParent(rightChild, table.rootPageNum)
 }
 
 func leafNodeSplitAndInsert(cursor *Cursor, key uint32, value *Row) {
@@ -468,6 +481,7 @@ func leafNodeSplitAndInsert(cursor *Cursor, key uint32, value *Row) {
 	newNode := getPage(cursor.table.pager, newPageNum)
 	initializeLeafNode(newNode)
 
+	setNodeParent(newNode, nodeParent(oldNode))
 	setLeafNodeNextLeaf(newNode, leafNodeNextLeaf(oldNode))
 	setLeafNodeNextLeaf(oldNode, newPageNum)
 
