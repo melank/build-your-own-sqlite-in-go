@@ -290,3 +290,78 @@ func TestSelectFromMultiLevelBTree(t *testing.T) {
 		)
 	}
 }
+
+func TestPrintFourLeafNodeBTree(t *testing.T) {
+	ids := []int{
+		18, 7, 10, 29, 23, 4, 14, 30, 15, 26,
+		22, 19, 2, 1, 21, 11, 6, 20, 5, 8,
+		9, 3, 12, 27, 17, 16, 13, 24, 25, 28,
+	}
+
+	commands := make([]string, 0, len(ids)+2)
+
+	for _, id := range ids {
+		commands = append(
+			commands,
+			fmt.Sprintf(
+				"insert %d user%d person%d@example.com",
+				id,
+				id,
+				id,
+			),
+		)
+	}
+
+	commands = append(commands, ".btree", ".exit")
+
+	got := runScript(t, commands)
+
+	wantSuffix := "db > Tree:\n" +
+		"- internal (size 3)\n" +
+		"  - leaf (size 7)\n" +
+		"    - 1\n" +
+		"    - 2\n" +
+		"    - 3\n" +
+		"    - 4\n" +
+		"    - 5\n" +
+		"    - 6\n" +
+		"    - 7\n" +
+		"  - key 7\n" +
+		"  - leaf (size 8)\n" +
+		"    - 8\n" +
+		"    - 9\n" +
+		"    - 10\n" +
+		"    - 11\n" +
+		"    - 12\n" +
+		"    - 13\n" +
+		"    - 14\n" +
+		"    - 15\n" +
+		"  - key 15\n" +
+		"  - leaf (size 7)\n" +
+		"    - 16\n" +
+		"    - 17\n" +
+		"    - 18\n" +
+		"    - 19\n" +
+		"    - 20\n" +
+		"    - 21\n" +
+		"    - 22\n" +
+		"  - key 22\n" +
+		"  - leaf (size 8)\n" +
+		"    - 23\n" +
+		"    - 24\n" +
+		"    - 25\n" +
+		"    - 26\n" +
+		"    - 27\n" +
+		"    - 28\n" +
+		"    - 29\n" +
+		"    - 30\n" +
+		"db > "
+
+	if !strings.HasSuffix(got, wantSuffix) {
+		t.Errorf(
+			"tree output mismatch\nwant suffix:\n%q\ngot:\n%q",
+			wantSuffix,
+			got,
+		)
+	}
+}

@@ -64,6 +64,7 @@ const (
 	internalNodeChildSize = 4
 	internalNodeKeySize   = 4
 	internalNodeCellSize  = internalNodeChildSize + internalNodeKeySize
+	internalNodeMaxCells  = 3
 
 	leafNodeNumCellsSize   = 4
 	leafNodeNumCellsOffset = commonNodeHeaderSize
@@ -477,6 +478,7 @@ func createNewRoot(table *Table, rightChildPageNum uint32) {
 
 func leafNodeSplitAndInsert(cursor *Cursor, key uint32, value *Row) {
 	oldNode := getPage(cursor.table.pager, cursor.pageNum)
+	oldMax := getNodeMaxKey(oldNode)
 	newPageNum := getUnusedPageNum(cursor.table.pager)
 	newNode := getPage(cursor.table.pager, newPageNum)
 	initializeLeafNode(newNode)
@@ -517,8 +519,12 @@ func leafNodeSplitAndInsert(cursor *Cursor, key uint32, value *Row) {
 		return
 	}
 
-	fmt.Fprintln(os.Stderr, "Need to implement updating parent after split.")
-	os.Exit(1)
+	parentPageNum := nodeParent(oldNode)
+	newMax := getNodeMaxKey(oldNode)
+	parent := getPage(cursor.table.pager, parentPageNum)
+
+	updateInternalNodeKey(parent, oldMax, newMax)
+	internalNodeInsert(cursor.table, parentPageNum, newPageNum)
 }
 
 func leafNodeInsert(cursor *Cursor, key uint32, value *Row) {
@@ -634,15 +640,11 @@ func leafNodeFind(table *Table, pageNum uint32, key uint32) *Cursor {
 	return cursor
 }
 
-func internalNodeFind(table *Table, pageNum uint32, key uint32) *Cursor {
-	node := getPage(table.pager, pageNum)
+func internalNodeFindChild(node []byte, key uint32) uint32 {
 	numKeys := internalNodeNumKeys(node)
-
-	// キー数より子ノード数は1つ多い
 	minIndex := uint32(0)
 	maxIndex := numKeys
 
-	// key 以上の最初の内部ノードキーを探す
 	for minIndex != maxIndex {
 		index := (minIndex + maxIndex) / 2
 		keyToRight := internalNodeKey(node, index)
@@ -654,7 +656,60 @@ func internalNodeFind(table *Table, pageNum uint32, key uint32) *Cursor {
 		}
 	}
 
-	childPageNum := internalNodeChild(node, minIndex)
+	return minIndex
+}
+
+func updateInternalNodeKey(node []byte, oldKey uint32, newKey uint32) {
+	oldChildIndex := internalNodeFindChild(node, oldKey)
+	setInternalNodeKey(node, oldChildIndex, newKey)
+}
+
+func internalNodeInsert(
+	table *Table,
+	parentPageNum uint32,
+	childPageNum uint32,
+) {
+	parent := getPage(table.pager, parentPageNum)
+	child := getPage(table.pager, childPageNum)
+	childMaxKey := getNodeMaxKey(child)
+	index := internalNodeFindChild(parent, childMaxKey)
+
+	originalNumKeys := internalNodeNumKeys(parent)
+
+	if originalNumKeys >= internalNodeMaxCells {
+		fmt.Fprintln(os.Stderr, "Need to implement splitting internal node.")
+		os.Exit(1)
+	}
+
+	setInternalNodeNumKeys(parent, originalNumKeys+1)
+
+	rightChildPageNum := internalNodeRightChild(parent)
+	rightChild := getPage(table.pager, rightChildPageNum)
+
+	if childMaxKey > getNodeMaxKey(rightChild) {
+		// 元の右端の子を通常セルへ移し、新しい子を右端にする
+		setInternalNodeChild(parent, originalNumKeys, rightChildPageNum)
+		setInternalNodeKey(parent, originalNumKeys, getNodeMaxKey(rightChild))
+		setInternalNodeRightChild(parent, childPageNum)
+		return
+	}
+
+	for i := originalNumKeys; i > index; i-- {
+		copy(
+			internalNodeCell(parent, i),
+			internalNodeCell(parent, i-1),
+		)
+	}
+
+	setInternalNodeChild(parent, index, childPageNum)
+	setInternalNodeKey(parent, index, childMaxKey)
+}
+
+func internalNodeFind(table *Table, pageNum uint32, key uint32) *Cursor {
+	node := getPage(table.pager, pageNum)
+
+	childIndex := internalNodeFindChild(node, key)
+	childPageNum := internalNodeChild(node, childIndex)
 	child := getPage(table.pager, childPageNum)
 
 	switch getNodeType(child) {
