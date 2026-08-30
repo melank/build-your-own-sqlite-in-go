@@ -593,17 +593,22 @@ func printTree(pager *Pager, pageNum uint32, indentationLevel uint32) {
 		indent(indentationLevel)
 		fmt.Printf("- internal (size %d)\n", numKeys)
 
-		for i := uint32(0); i < numKeys; i++ {
-			printTree(pager, internalNodeChild(node, i), indentationLevel+1)
-			indent(indentationLevel + 1)
-			fmt.Printf("- key %d\n", internalNodeKey(node, i))
+		if numKeys > 0 {
+			for i := uint32(0); i < numKeys; i++ {
+				printTree(
+					pager,
+					internalNodeChild(node, i),
+					indentationLevel + 1,
+				)
+				indent(indentationLevel + 1)
+				fmt.Printf("- key %d\n", internalNodeKey(node, i))
+			}
+			printTree(
+				pager,
+				internalNodeRightChild(node),
+				indentationLevel+1,
+			)
 		}
-
-		printTree(
-			pager,
-			internalNodeRightChild(node),
-			indentationLevel+1,
-		)
 	}
 }
 
