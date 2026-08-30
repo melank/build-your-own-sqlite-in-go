@@ -66,6 +66,8 @@ const (
 	internalNodeCellSize  = internalNodeChildSize + internalNodeKeySize
 	internalNodeMaxCells  = 3
 
+	invalidPageNum = ^uint32(0)
+
 	leafNodeNumCellsSize   = 4
 	leafNodeNumCellsOffset = commonNodeHeaderSize
 	leafNodeNextLeafSize   = 4
@@ -451,6 +453,9 @@ func initializeInternalNode(node []byte) {
 	setNodeType(node, NodeInternal)
 	setNodeRoot(node, false)
 	setInternalNodeNumKeys(node, 0)
+	// ルートのページ番号は 0。右の子を未初期化のままにすると
+	// 0 になり、新しい内部ノードがルートの親になってしまう
+	setInternalNodeRightChild(node, invalidPageNum)
 }
 
 func createNewRoot(table *Table, rightChildPageNum uint32) {
