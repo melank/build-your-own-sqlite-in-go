@@ -709,7 +709,13 @@ func internalNodeInsert(
 	setInternalNodeNumKeys(parent, originalNumKeys+1)
 
 	rightChildPageNum := internalNodeRightChild(parent)
+	if rightChildPageNum == invalidPageNum {
+		setInternalNodeRightChild(parent, childPageNum)
+		return
+	}
+
 	rightChild := getPage(table.pager, rightChildPageNum)
+	setInternalNodeNumKeys(parent, originalNumKeys+1)
 
 	if childMaxKey > getNodeMaxKey(table.pager, rightChild) {
 		// 元の右端の子を通常セルへ移し、新しい子を右端にする
