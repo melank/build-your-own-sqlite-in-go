@@ -425,12 +425,13 @@ func setInternalNodeKey(node []byte, keyNum uint32, key uint32) {
 	)
 }
 
-func getNodeMaxKey(node []byte) uint32 {
+func getNodeMaxKey(pager *Pager, node []byte) uint32 {
 	switch getNodeType(node) {
-	case NodeInternal:
-		return internalNodeKey(node, internalNodeNumKeys(node)-1)
 	case NodeLeaf:
 		return leafNodeKey(node, leafNodeNumCells(node)-1)
+	case NodeInternal:
+		rightChild := getPage(pager, internalNodeRightChild(node))
+		return getNodeMaxKey(pager, rightChild)
 	default:
 		panic("unknown node type")
 	}
@@ -488,7 +489,7 @@ func createNewRoot(table *Table, rightChildPageNum uint32) {
 	setNodeRoot(root, true)
 	setInternalNodeNumKeys(root, 1)
 	setInternalNodeChild(root, 0, leftChildPageNum)
-	setInternalNodeKey(root, 0, getNodeMaxKey(leftChild))
+	setInternalNodeKey(root, 0, getNodeMaxKey(table.pager, leftChild))
 	setInternalNodeRightChild(root, rightChildPageNum)
 
 	setNodeParent(leftChild, table.rootPageNum)
@@ -497,7 +498,7 @@ func createNewRoot(table *Table, rightChildPageNum uint32) {
 
 func leafNodeSplitAndInsert(cursor *Cursor, key uint32, value *Row) {
 	oldNode := getPage(cursor.table.pager, cursor.pageNum)
-	oldMax := getNodeMaxKey(oldNode)
+	oldMax := getNodeMaxKey(cursor.table.pager, oldNode)
 	newPageNum := getUnusedPageNum(cursor.table.pager)
 	newNode := getPage(cursor.table.pager, newPageNum)
 	initializeLeafNode(newNode)
@@ -539,7 +540,7 @@ func leafNodeSplitAndInsert(cursor *Cursor, key uint32, value *Row) {
 	}
 
 	parentPageNum := nodeParent(oldNode)
-	newMax := getNodeMaxKey(oldNode)
+	newMax := getNodeMaxKey(cursor.table.pager, oldNode)
 	parent := getPage(cursor.table.pager, parentPageNum)
 
 	updateInternalNodeKey(parent, oldMax, newMax)
@@ -695,7 +696,7 @@ func internalNodeInsert(
 ) {
 	parent := getPage(table.pager, parentPageNum)
 	child := getPage(table.pager, childPageNum)
-	childMaxKey := getNodeMaxKey(child)
+	childMaxKey := getNodeMaxKey(table.pager, child)
 	index := internalNodeFindChild(parent, childMaxKey)
 
 	originalNumKeys := internalNodeNumKeys(parent)
@@ -710,10 +711,10 @@ func internalNodeInsert(
 	rightChildPageNum := internalNodeRightChild(parent)
 	rightChild := getPage(table.pager, rightChildPageNum)
 
-	if childMaxKey > getNodeMaxKey(rightChild) {
+	if childMaxKey > getNodeMaxKey(table.pager, rightChild) {
 		// 元の右端の子を通常セルへ移し、新しい子を右端にする
 		setInternalNodeChild(parent, originalNumKeys, rightChildPageNum)
-		setInternalNodeKey(parent, originalNumKeys, getNodeMaxKey(rightChild))
+		setInternalNodeKey(parent, originalNumKeys, getNodeMaxKey(table.pager, rightChild))
 		setInternalNodeRightChild(parent, childPageNum)
 		return
 	}
