@@ -88,9 +88,21 @@ go run ./cmd/app
 ### 提示
 
 - 写経できる完成形のコードを出す（差分の説明だけにしない）
+- 差分は unified diff で出す。追加行は `+`、削除行は `-`、変更しない行は先頭を空白にする
 - 一度に出す量は小さくする。目安は関数 1〜3 個、または定数と短い関数の組
 - Part 単位で 1 コミットにする必要はない。テストが通る小さな塊で区切る
 - 既存の関数名・定数名に合わせる。新しい名前を勝手に増やさない
+
+差分は次の形で出す。そのあと写経用の完成形を出す。
+
+```diff
+ func initializeInternalNode(node []byte) {
+ 	setNodeType(node, NodeInternal)
+ 	setNodeRoot(node, false)
+ 	setInternalNodeNumKeys(node, 0)
++	setInternalNodeRightChild(node, invalidPageNum)
+ }
+```
 
 ### コミット
 
