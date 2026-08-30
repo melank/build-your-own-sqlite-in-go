@@ -480,9 +480,29 @@ func createNewRoot(table *Table, rightChildPageNum uint32) {
 	leftChildPageNum := getUnusedPageNum(table.pager)
 	leftChild := getPage(table.pager, leftChildPageNum)
 
+	if getNodeType(root) == NodeInternal {
+		initializeInternalNode(rightChild)
+		initializeInternalNode(leftChild)
+	}
+
 	// 元のルートの内容を左の子へ退避させる
 	copy(leftChild, root)
 	setNodeRoot(leftChild, false)
+
+	if getNodeType(leftChild) == NodeInternal {
+		for i := uint32(0); i < internalNodeNumKeys(leftChild); i++ {
+			child := getPage(
+				table.pager,
+				internalNodeChild(leftChild, i),
+			)
+			setNodeParent(child, leftChildPageNum)
+		}
+		child := getPage(
+			table.pager,
+			internalNodeRightChild(leftChild),
+		)
+		setNodeParent(child, leftChildPageNum)
+	}
 
 	// ページ0を新しい内部ルートとして再利用する
 	initializeInternalNode(root)
@@ -705,8 +725,6 @@ func internalNodeInsert(
 		fmt.Fprintln(os.Stderr, "Need to implement splitting internal node.")
 		os.Exit(1)
 	}
-
-	setInternalNodeNumKeys(parent, originalNumKeys+1)
 
 	rightChildPageNum := internalNodeRightChild(parent)
 	if rightChildPageNum == invalidPageNum {
