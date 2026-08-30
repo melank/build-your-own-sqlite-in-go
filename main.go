@@ -367,11 +367,25 @@ func internalNodeChild(node []byte, childNum uint32) uint32 {
 	}
 
 	if childNum == numKeys {
-		return internalNodeRightChild(node)
+		rightChild := internalNodeRightChild(node)
+		if rightChild == invalidPageNum { 
+			fmt.Fprintln(os.Stderr, "Tried to access right child of node, but was invalid page")
+			os.Exit(1)
+		}
+		return rightChild
 	}
 
 	cell := internalNodeCell(node, childNum)
-	return binary.LittleEndian.Uint32(cell[:internalNodeChildSize])
+	child := binary.LittleEndian.Uint32(cell[:internalNodeChildSize])
+	if child == invalidPageNum {
+		fmt.Fprintf(
+			os.Stderr,
+			"Tried to access child %d of node, but was invalid page\n",
+			childNum,
+		)
+		os.Exit(1)
+	}
+	return child
 }
 
 func setInternalNodeChild(node []byte, childNum uint32, pageNum uint32) {
